@@ -1,0 +1,60 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Get pnpm store path
+        id: pnpm-store
+        run: echo "store=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.store }}
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prebuild Android project
+        run: npx expo prebuild --platform android --no-install
+        working-directory: artifacts/mobile
+        env:
+          EXPO_PUBLIC_CLOUDFLARE_API_URL: https://yourcommunity-api.chandtrick0.workers.dev
+
+      - name: Build debug APK
+        run: cd android && ./gradlew assembleDebug
+        working-directory: artifacts/mobile
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: yourcommunity-debug
+          path: artifacts/mobile/android/app/build/outputs/apk/debug/*.apk
