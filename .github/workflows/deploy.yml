@@ -17,7 +17,7 @@ jobs:
         run: npm install
         working-directory: cf-worker
       - name: Deploy to Cloudflare Workers
-        run: npx wrangler deploy --config wrangler.toml
+        run: npx wrangler deploy worker.js --name yourcommunity-api --compatibility-date 2025-04-01 --compatibility-flags nodejs_compat
         working-directory: cf-worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
