@@ -96,14 +96,14 @@ export function PostCard({ post, onDelete, onPin }: Props) {
             />
           ) : (
             <Text style={styles.avatarLetter}>
-              {post.authorName[0]?.toUpperCase()}
+              {(post.authorName ?? "?")[0]?.toUpperCase()}
             </Text>
           )}
         </View>
         <View style={styles.authorInfo}>
           <View style={styles.nameRow}>
             <Text style={[styles.authorName, { color: colors.foreground }]}>
-              {post.authorName}
+              {post.authorName ?? "Unknown"}
             </Text>
             <RoleBadge role={post.authorRole} small />
           </View>
