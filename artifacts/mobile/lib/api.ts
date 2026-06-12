@@ -1,11 +1,9 @@
 function getApiBase(): string {
-  if (typeof window !== "undefined" && typeof document !== "undefined") {
-    return "/api";
-  }
+  const cfUrl = process.env.EXPO_PUBLIC_CLOUDFLARE_API_URL;
+  if (cfUrl) return cfUrl.replace(/\/+$/, "") + "/api";
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  if (domain) {
-    return `https://${domain}/api`;
-  }
+  if (domain) return `https://${domain}/api`;
+  if (typeof window !== "undefined" && typeof document !== "undefined") return "/api";
   return "http://localhost:8080/api";
 }
 

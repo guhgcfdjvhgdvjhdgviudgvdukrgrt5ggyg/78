@@ -12,6 +12,7 @@ router.get("/posts", async (req, res) => {
     const userMap = Object.fromEntries(users.map((u: any) => [u.id, u]));
     const enriched = allPosts.map((p) => ({
       ...p,
+      likes: p.likes ?? [],
       authorName: userMap[p.authorId]?.name || "Unknown",
       authorRole: userMap[p.authorId]?.role || "member",
       authorAvatar: userMap[p.authorId]?.avatar || null,

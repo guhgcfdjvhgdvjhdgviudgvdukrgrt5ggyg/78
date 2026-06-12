@@ -29,7 +29,8 @@ export function PostCard({ post, onDelete, onPin }: Props) {
   const router = useRouter();
   const [liking, setLiking] = useState(false);
 
-  const isLiked = profile ? post.likes.includes(profile.uid) : false;
+  const likes = post.likes ?? [];
+  const isLiked = profile ? likes.includes(profile.uid) : false;
   const canModerate =
     profile?.role === "admin" || profile?.role === "moderator";
 
@@ -141,7 +142,7 @@ export function PostCard({ post, onDelete, onPin }: Props) {
               { color: isLiked ? "#E53935" : colors.mutedForeground },
             ]}
           >
-            {post.likes.length}
+            {likes.length}
           </Text>
         </TouchableOpacity>
         <View style={styles.action}>
