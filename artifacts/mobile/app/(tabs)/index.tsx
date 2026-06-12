@@ -126,6 +126,7 @@ export default function FeedScreen() {
               post={item}
               onDelete={handleDelete}
               onPin={handlePin}
+              onLikeRefresh={fetchPosts}
             />
           )}
           contentContainerStyle={{
@@ -138,19 +139,21 @@ export default function FeedScreen() {
         />
       )}
 
-      <TouchableOpacity
-        onPress={() => setShowNewPost(true)}
-        style={[
-          styles.fab,
-          {
-            backgroundColor: colors.primary,
-            bottom: insets.bottom + 80,
-          },
-        ]}
-        activeOpacity={0.85}
-      >
-        <Feather name="plus" size={26} color="#fff" />
-      </TouchableOpacity>
+      {profile?.role !== "member" && (
+        <TouchableOpacity
+          onPress={() => setShowNewPost(true)}
+          style={[
+            styles.fab,
+            {
+              backgroundColor: colors.primary,
+              bottom: insets.bottom + 80,
+            },
+          ]}
+          activeOpacity={0.85}
+        >
+          <Feather name="plus" size={26} color="#fff" />
+        </TouchableOpacity>
+      )}
 
       <NewPostModal
         visible={showNewPost}

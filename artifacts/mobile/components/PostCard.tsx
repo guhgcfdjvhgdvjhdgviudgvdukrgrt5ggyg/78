@@ -21,9 +21,10 @@ interface Props {
   post: Post;
   onDelete?: (postId: string) => void;
   onPin?: (postId: string, pinned: boolean) => void;
+  onLikeRefresh?: () => void;
 }
 
-export function PostCard({ post, onDelete, onPin }: Props) {
+export function PostCard({ post, onDelete, onPin, onLikeRefresh }: Props) {
   const colors = useColors();
   const { profile } = useAuth();
   const router = useRouter();
@@ -38,7 +39,12 @@ export function PostCard({ post, onDelete, onPin }: Props) {
     if (!profile || liking) return;
     setLiking(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    console.warn("Like not implemented via REST API yet");
+    try {
+      await api.posts.like(post.id);
+      onLikeRefresh?.();
+    } catch (e) {
+      console.warn("Like error:", e);
+    }
     setLiking(false);
   };
 
@@ -142,7 +148,7 @@ export function PostCard({ post, onDelete, onPin }: Props) {
               { color: isLiked ? "#E53935" : colors.mutedForeground },
             ]}
           >
-            {likes.length}
+            {post.likeCount ?? likes.length}
           </Text>
         </TouchableOpacity>
         <View style={styles.action}>

@@ -71,6 +71,8 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify({ pinned }),
       }),
+    like: (id: string) =>
+      request<any>(`/posts/${id}/like`, { method: "POST" }),
   },
 
   comments: {
@@ -105,10 +107,10 @@ export const api = {
 
   chat: {
     list: () => request<any[]>("/chat"),
-    send: (text: string) =>
+    send: (text: string, imageUrl?: string) =>
       request<any>("/chat", {
         method: "POST",
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, imageUrl }),
       }),
     delete: (id: string) =>
       request<any>(`/chat/${id}`, { method: "DELETE" }),

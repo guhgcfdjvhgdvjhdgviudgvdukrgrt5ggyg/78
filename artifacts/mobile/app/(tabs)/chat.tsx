@@ -1,11 +1,14 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
+  KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
@@ -13,7 +16,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChatBubble } from "@/components/ChatBubble";
 import { useAuth } from "@/context/AuthContext";
@@ -32,6 +34,8 @@ export default function ChatScreen() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [attachImage, setAttachImage] = useState<string | null>(null);
+  const flatRef = useRef<FlatList>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -76,13 +80,26 @@ export default function ChatScreen() {
     }, [])
   );
 
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images",
+      quality: 0.6,
+      base64: true,
+    });
+    if (!result.canceled && result.assets[0]?.base64) {
+      setAttachImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
+    }
+  };
+
   const handleSend = async () => {
-    if (!text.trim() || !profile || sending) return;
+    if ((!text.trim() && !attachImage) || !profile || sending) return;
     const msgText = text.trim();
+    const img = attachImage;
     setText("");
+    setAttachImage(null);
     setSending(true);
     try {
-      await api.chat.send(msgText);
+      await api.chat.send(msgText, img || undefined);
     } catch (e) {
       console.warn("Send message error:", e);
       Alert.alert("Error", "Failed to send message.");
@@ -136,8 +153,8 @@ export default function ChatScreen() {
 
       <KeyboardAvoidingView
         style={styles.container}
-        behavior="padding"
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? topPad + 50 : 0}
       >
         {loading ? (
           <View style={styles.center}>
@@ -165,6 +182,7 @@ export default function ChatScreen() {
           </View>
         ) : (
           <FlatList
+            ref={flatRef}
             data={messages}
             keyExtractor={(m) => m.id}
             inverted
@@ -200,36 +218,41 @@ export default function ChatScreen() {
             {
               borderTopColor: colors.border,
               backgroundColor: colors.background,
-              paddingBottom: insets.bottom + 8,
+              paddingBottom: Platform.OS === "ios" ? insets.bottom + 8 : 8,
             },
           ]}
         >
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.card,
-                color: colors.foreground,
-                borderColor: colors.border,
-                borderRadius: 20,
-              },
-            ]}
-            placeholder="Message the community..."
-            placeholderTextColor={colors.mutedForeground}
-            value={text}
-            onChangeText={setText}
-            onSubmitEditing={handleSend}
-            returnKeyType="send"
-            multiline
-          />
+          <TouchableOpacity onPress={pickImage} style={[styles.attachBtn, { borderRadius: 20 }]}>
+            <Feather name="image" size={20} color={colors.mutedForeground} />
+          </TouchableOpacity>
+          <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: 20 }]}>
+            {attachImage && (
+              <View style={[styles.attachPreview, { borderRadius: 12 }]}>
+                <Text style={styles.attachPreviewText} numberOfLines={1}>📷 Image attached</Text>
+                <TouchableOpacity onPress={() => setAttachImage(null)}>
+                  <Feather name="x" size={14} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            )}
+            <TextInput
+              style={[styles.input, { color: colors.foreground }]}
+              placeholder="Message the community..."
+              placeholderTextColor={colors.mutedForeground}
+              value={text}
+              onChangeText={setText}
+              onSubmitEditing={handleSend}
+              returnKeyType="send"
+              multiline
+            />
+          </View>
           <TouchableOpacity
             onPress={handleSend}
-            disabled={!text.trim() || sending}
+            disabled={(!text.trim() && !attachImage) || sending}
             style={[
               styles.sendBtn,
               {
                 backgroundColor: colors.primary,
-                opacity: !text.trim() || sending ? 0.5 : 1,
+                opacity: (!text.trim() && !attachImage) || sending ? 0.5 : 1,
                 borderRadius: 20,
               },
             ]}
@@ -266,23 +289,46 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingTop: 10,
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingTop: 8,
     borderTopWidth: 0.5,
   },
-  input: {
+  attachBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  inputWrap: {
     flex: 1,
-    minHeight: 40,
-    maxHeight: 100,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
     borderWidth: 0.5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  input: {
+    minHeight: 32,
+    maxHeight: 80,
+    fontSize: 15,
+    paddingVertical: 4,
+  },
+  attachPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.4)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginBottom: 4,
+    gap: 6,
+  },
+  attachPreviewText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#fff",
   },
   sendBtn: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     justifyContent: "center",
     alignItems: "center",
   },

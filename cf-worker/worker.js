@@ -82,14 +82,25 @@ app.get('/api/auth/me', requireAuth, async (c) => {
 app.get('/api/posts', async (c) => {
   try {
     const db = sql(c.env);
+    const authHeader = c.req.header('Authorization');
+    let userId = null;
+    if (authHeader?.startsWith('Bearer ')) {
+      try { userId = jwt.verify(authHeader.slice(7), secret(c)).userId; } catch {}
+    }
     const posts = await db`SELECT p.*, u.name as author_name, u.role as author_role, u.avatar as author_avatar,
-      (SELECT count(*)::int FROM comments WHERE post_id = p.id) as comment_count
+      (SELECT count(*)::int FROM comments WHERE post_id = p.id) as comment_count,
+      (SELECT count(*)::int FROM likes WHERE post_id = p.id) as like_count
       FROM posts p LEFT JOIN users u ON u.id = p.author_id ORDER BY p.pinned DESC, p.created_at DESC`;
-    return c.json(posts.map(p => ({ ...p, likeCount: 0 })));
+    let likedSet = new Set();
+    if (userId) {
+      const likes = await db`SELECT post_id FROM likes WHERE user_id = ${userId}`;
+      likedSet = new Set(likes.map(l => l.post_id));
+    }
+    return c.json(posts.map(p => ({ ...p, likes: likedSet.has(p.id) ? [userId] : [], likeCount: Number(p.like_count) })));
   } catch (err) { console.error('Posts error:', err); return c.json({ error: 'Internal server error' }, 500); }
 });
 
-app.post('/api/posts', requireAuth, async (c) => {
+app.post('/api/posts', requireAuth, requireRole('admin', 'moderator'), async (c) => {
   try {
     const user = c.get('user');
     const { text, imageUrl } = await c.req.json();
@@ -100,13 +111,12 @@ app.post('/api/posts', requireAuth, async (c) => {
   } catch (err) { console.error('Create post error:', err); return c.json({ error: 'Internal server error' }, 500); }
 });
 
-app.delete('/api/posts/:id', requireAuth, async (c) => {
+app.delete('/api/posts/:id', requireAuth, requireRole('admin', 'moderator'), async (c) => {
   try {
     const user = c.get('user');
     const db = sql(c.env);
     const [post] = await db`SELECT * FROM posts WHERE id = ${c.req.param('id')} LIMIT 1`;
     if (!post) return c.json({ error: 'Post not found' }, 404);
-    if (post.author_id !== user.userId && user.role === 'member') return c.json({ error: 'Forbidden' }, 403);
     await db`DELETE FROM posts WHERE id = ${c.req.param('id')}`;
     return c.json({ success: true });
   } catch (err) { console.error('Delete post error:', err); return c.json({ error: 'Internal server error' }, 500); }
@@ -121,6 +131,20 @@ app.patch('/api/posts/:id/pin', requireAuth, async (c) => {
     await db`UPDATE posts SET pinned = ${pinned === true} WHERE id = ${c.req.param('id')}`;
     return c.json({ success: true });
   } catch (err) { console.error('Pin error:', err); return c.json({ error: 'Internal server error' }, 500); }
+});
+
+app.post('/api/posts/:id/like', requireAuth, async (c) => {
+  try {
+    const user = c.get('user');
+    const db = sql(c.env);
+    const [existing] = await db`SELECT id FROM likes WHERE post_id = ${c.req.param('id')} AND user_id = ${user.userId} LIMIT 1`;
+    if (existing) {
+      await db`DELETE FROM likes WHERE id = ${existing.id}`;
+      return c.json({ liked: false });
+    }
+    await db`INSERT INTO likes (post_id, user_id) VALUES (${c.req.param('id')}, ${user.userId})`;
+    return c.json({ liked: true });
+  } catch (err) { console.error('Like error:', err); return c.json({ error: 'Internal server error' }, 500); }
 });
 
 // ── Comments ──────────────────────────────────────────────────────
@@ -165,26 +189,22 @@ app.get('/api/events', async (c) => {
   } catch (err) { console.error('Events error:', err); return c.json({ error: 'Internal server error' }, 500); }
 });
 
-app.post('/api/events', requireAuth, async (c) => {
+app.post('/api/events', requireAuth, requireRole('admin', 'moderator'), async (c) => {
   try {
-    const user = c.get('user');
-    if (user.role === 'member') return c.json({ error: 'Forbidden' }, 403);
     const { title, date, description, link } = await c.req.json();
     if (!title || !date) return c.json({ error: 'Title and date required' }, 400);
+    const user = c.get('user');
     const db = sql(c.env);
     const [ev] = await db`INSERT INTO events (author_id, title, date, description, link) VALUES (${user.userId}, ${title}, ${date}, ${description||null}, ${link||null}) RETURNING *`;
     return c.json(ev, 201);
   } catch (err) { console.error('Create event error:', err); return c.json({ error: 'Internal server error' }, 500); }
 });
 
-app.delete('/api/events/:id', requireAuth, async (c) => {
+app.delete('/api/events/:id', requireAuth, requireRole('admin', 'moderator'), async (c) => {
   try {
-    const user = c.get('user');
-    if (user.role === 'member') return c.json({ error: 'Forbidden' }, 403);
     const db = sql(c.env);
     const [ev] = await db`SELECT * FROM events WHERE id = ${c.req.param('id')} LIMIT 1`;
     if (!ev) return c.json({ error: 'Event not found' }, 404);
-    if (ev.author_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403);
     await db`DELETE FROM events WHERE id = ${c.req.param('id')}`;
     return c.json({ success: true });
   } catch (err) { console.error('Delete event error:', err); return c.json({ error: 'Internal server error' }, 500); }
@@ -199,26 +219,22 @@ app.get('/api/announcements', async (c) => {
   } catch (err) { console.error('Announcements error:', err); return c.json({ error: 'Internal server error' }, 500); }
 });
 
-app.post('/api/announcements', requireAuth, async (c) => {
+app.post('/api/announcements', requireAuth, requireRole('admin', 'moderator'), async (c) => {
   try {
-    const user = c.get('user');
-    if (user.role === 'member') return c.json({ error: 'Forbidden' }, 403);
     const { title, body } = await c.req.json();
     if (!title || !body) return c.json({ error: 'Title and body required' }, 400);
+    const user = c.get('user');
     const db = sql(c.env);
     const [ann] = await db`INSERT INTO announcements (author_id, title, body) VALUES (${user.userId}, ${title}, ${body}) RETURNING *`;
     return c.json(ann, 201);
   } catch (err) { console.error('Create announcement error:', err); return c.json({ error: 'Internal server error' }, 500); }
 });
 
-app.delete('/api/announcements/:id', requireAuth, async (c) => {
+app.delete('/api/announcements/:id', requireAuth, requireRole('admin', 'moderator'), async (c) => {
   try {
-    const user = c.get('user');
-    if (user.role === 'member') return c.json({ error: 'Forbidden' }, 403);
     const db = sql(c.env);
     const [ann] = await db`SELECT * FROM announcements WHERE id = ${c.req.param('id')} LIMIT 1`;
     if (!ann) return c.json({ error: 'Announcement not found' }, 404);
-    if (ann.author_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403);
     await db`DELETE FROM announcements WHERE id = ${c.req.param('id')}`;
     return c.json({ success: true });
   } catch (err) { console.error('Delete announcement error:', err); return c.json({ error: 'Internal server error' }, 500); }
@@ -236,12 +252,12 @@ app.get('/api/chat', async (c) => {
 app.post('/api/chat', requireAuth, async (c) => {
   try {
     const user = c.get('user');
-    const { text } = await c.req.json();
-    if (!text) return c.json({ error: 'Text is required' }, 400);
+    const { text, imageUrl, fileUrl, fileName } = await c.req.json();
+    if (!text && !imageUrl) return c.json({ error: 'Text or image required' }, 400);
     const db = sql(c.env);
     const [usr] = await db`SELECT name, role, avatar FROM users WHERE id = ${user.userId} LIMIT 1`;
     if (!usr) return c.json({ error: 'User not found' }, 404);
-    const [msg] = await db`INSERT INTO chat_messages (sender_id, sender_name, sender_role, sender_avatar, text) VALUES (${user.userId}, ${usr.name}, ${usr.role}, ${usr.avatar}, ${text}) RETURNING *`;
+    const [msg] = await db`INSERT INTO chat_messages (sender_id, sender_name, sender_role, sender_avatar, text, image_url, file_url, file_name) VALUES (${user.userId}, ${usr.name}, ${usr.role}, ${usr.avatar}, ${text||''}, ${imageUrl||null}, ${fileUrl||null}, ${fileName||null}) RETURNING *`;
     return c.json(msg, 201);
   } catch (err) { console.error('Send chat error:', err); return c.json({ error: 'Internal server error' }, 500); }
 });

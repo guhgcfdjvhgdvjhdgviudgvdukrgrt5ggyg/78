@@ -22,6 +22,7 @@ export interface Post {
   text: string;
   imageUrl: string | null;
   likes: string[];
+  likeCount: number;
   commentCount: number;
   createdAt: number;
   pinned: boolean;
@@ -45,6 +46,9 @@ export interface ChatMessage {
   senderRole: UserRole;
   senderAvatar: string | null;
   text: string;
+  imageUrl?: string | null;
+  fileUrl?: string | null;
+  fileName?: string | null;
   createdAt: number;
 }
 

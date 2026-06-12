@@ -55,14 +55,23 @@ export function ChatBubble({ message, isOwn, showSender = true, online }: Props)
             },
           ]}
         >
-          <Text
-            style={[
-              styles.text,
-              { color: isOwn ? colors.primaryForeground : colors.foreground },
-            ]}
-          >
-            {message.text}
-          </Text>
+          {message.imageUrl && (
+            <Image
+              source={{ uri: message.imageUrl }}
+              style={[styles.image, { borderRadius: colors.radius }]}
+              contentFit="cover"
+            />
+          )}
+          {message.text ? (
+            <Text
+              style={[
+                styles.text,
+                { color: isOwn ? colors.primaryForeground : colors.foreground, marginTop: message.imageUrl ? 6 : 0 },
+              ]}
+            >
+              {message.text}
+            </Text>
+          ) : null}
         </View>
         <View style={styles.metaRow}>
           <Text style={[styles.time, { color: colors.mutedForeground }]}>
@@ -137,6 +146,10 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 15,
     lineHeight: 21,
+  },
+  image: {
+    width: "100%",
+    height: 160,
   },
   metaRow: {
     flexDirection: "row",
