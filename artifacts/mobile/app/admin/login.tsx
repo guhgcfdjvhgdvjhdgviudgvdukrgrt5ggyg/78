@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import { Image } from "expo-image";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -15,14 +15,15 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useAuth } from "@/context/AuthContext";
+import { api, setAdminToken } from "@/lib/api";
 import { useColors } from "@/hooks/useColors";
 
-export default function LoginScreen() {
+const ADMIN_TOKEN_KEY = "admin_token";
+
+export default function AdminLoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,15 +36,17 @@ export default function LoginScreen() {
     }
     setLoading(true);
     try {
-      await signIn(email.trim(), password);
-      Alert.alert("Welcome", "Welcome back!");
+      const { user, token } = await api.auth.login(email.trim(), password);
+      if (user.role !== "admin") {
+        Alert.alert("Admin Access Only", "This portal is for administrators only.");
+        return;
+      }
+      await AsyncStorage.setItem(ADMIN_TOKEN_KEY, token);
+      setAdminToken(token);
+      router.replace("/admin/dashboard");
     } catch (err: any) {
       const msg = err.message ?? "Login failed.";
-      if (msg.toLowerCase().includes("verify your email")) {
-        Alert.alert("Email Not Verified", "Please check your email to verify your account before logging in.");
-      } else {
-        Alert.alert("Login Failed", msg);
-      }
+      Alert.alert("Login Failed", msg);
     } finally {
       setLoading(false);
     }
@@ -66,16 +69,16 @@ export default function LoginScreen() {
           <View
             style={[
               styles.logoCircle,
-              { backgroundColor: colors.primary, borderRadius: 28 },
+              { backgroundColor: colors.adminBadge, borderRadius: 28 },
             ]}
           >
-            <Feather name="users" size={36} color="#fff" />
+            <Feather name="shield" size={36} color="#fff" />
           </View>
           <Text style={[styles.appName, { color: colors.foreground }]}>
-            YourCommunity
+            Admin Panel
           </Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-            Sign in to continue
+            Authorized personnel only
           </Text>
         </View>
 
@@ -135,7 +138,7 @@ export default function LoginScreen() {
             style={[
               styles.primaryBtn,
               {
-                backgroundColor: colors.primary,
+                backgroundColor: colors.adminBadge,
                 borderRadius: 20,
                 opacity: loading ? 0.7 : 1,
               },
@@ -146,20 +149,8 @@ export default function LoginScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.primaryBtnText}>Sign In</Text>
+              <Text style={styles.primaryBtnText}>Admin Login</Text>
             )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => router.push("/(auth)/register")}
-            style={styles.linkBtn}
-          >
-            <Text style={[styles.linkText, { color: colors.mutedForeground }]}>
-              Don't have an account?{" "}
-              <Text style={{ color: colors.primary, fontWeight: "700" }}>
-                Sign up
-              </Text>
-            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -216,12 +207,5 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "700",
-  },
-  linkBtn: {
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  linkText: {
-    fontSize: 14,
   },
 });

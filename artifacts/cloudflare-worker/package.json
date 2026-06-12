@@ -1,0 +1,27 @@
+{
+  "name": "cf-worker",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "node -e \"require(process.cwd()+'/../../node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main').buildSync({entryPoints:['worker.js'],bundle:true,platform:'node',target:'es2022',outfile:'dist/worker.js',external:['__STATIC_CONTENT_MANIFEST'],logLevel:'warning'});console.log('Build OK')\"",
+    "deploy": "pnpm build && wrangler deploy",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "hono": "^4.0.0",
+    "@neondatabase/serverless": "^0.9.0",
+    "drizzle-orm": "^0.45.0",
+    "drizzle-zod": "^0.5.1",
+    "zod": "^3.22.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.0"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0",
+    "drizzle-kit": "^0.30.0",
+    "@cloudflare/workers-types": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

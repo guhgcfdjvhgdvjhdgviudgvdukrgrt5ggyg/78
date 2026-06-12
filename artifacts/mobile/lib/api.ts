@@ -1,9 +1,12 @@
 function getApiBase(): string {
-  if (typeof window !== "undefined") {
+  if (typeof window !== "undefined" && typeof document !== "undefined") {
     return "/api";
   }
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  return domain ? `https://${domain}/api` : "http://localhost:8080/api";
+  if (domain) {
+    return `https://${domain}/api`;
+  }
+  return "http://localhost:8080/api";
 }
 
 const API_BASE = getApiBase();
