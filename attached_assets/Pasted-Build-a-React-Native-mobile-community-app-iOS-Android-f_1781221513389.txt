@@ -1,0 +1,130 @@
+Build a React Native mobile community app (iOS + Android) for a YouTube creator and course seller. The app is called "YourCommunity" — replace with actual brand name.
+
+---
+
+TECH STACK:
+- React Native (Expo)
+- Firebase (Auth + Firestore + Storage + FCM)
+- React Navigation v6
+- Zustand (state management)
+
+---
+
+USER ROLES:
+1. Admin — full access, can post, delete anything, send broadcasts
+2. Moderator — can delete posts/comments, pin posts, manage events
+3. Member — can post, comment, like, DM admin, join events
+
+---
+
+SCREENS & FEATURES:
+
+1. ONBOARDING
+   - Splash screen with logo
+   - Login (Email/Google OAuth)
+   - Register (name, email, password)
+   - "Join Community" screen with invite code or open join
+
+2. HOME FEED
+   - Posts from admin and members
+   - Each post: author name + role badge, text, optional image/video, like & comment count
+   - Admin posts pinned to top with "Admin" badge (blue)
+   - Moderator posts show "Mod" badge (green)
+   - Pull to refresh
+   - Floating "+" button for new post (all users)
+
+3. COMMUNITY CHAT
+   - Group chat room for all members
+   - Real-time messages (Firestore listeners)
+   - Message bubbles: sent (right, blue), received (left, gray)
+   - Show sender name + role badge
+   - Long press to delete own message
+
+4. DIRECT MESSAGES (DM / INBOX)
+   - Members can DM admin only
+   - Admin can see all DM threads in inbox
+   - Real-time chat (Firestore)
+   - Unread badge on nav tab
+
+5. MEMBERS LIST
+   - Search bar (filter by name)
+   - List: avatar, name, role badge
+   - Tap member → view profile
+   - Admin can change user roles from here
+
+6. EVENTS & ANNOUNCEMENTS
+   - Admin/Mod can create events: title, date/time, description, link
+   - Pinned announcements section at top
+   - Upcoming events in chronological order
+   - "Set Reminder" button → local notification
+
+7. NOTIFICATIONS
+   - In-app notification feed
+   - Push notifications via FCM for: new admin post, event reminder, reply to comment, DM received
+   - Unread dot indicator on bell icon
+
+8. ADMIN PROFILE PAGE
+   - Admin's photo, name, bio
+   - YouTube channel link
+   - Course links (list of courses with thumbnails)
+   - Post history
+
+9. USER PROFILE PAGE
+   - Avatar (upload from gallery)
+   - Name, bio
+   - Posts made
+   - Settings: edit profile, notifications toggle, logout
+
+---
+
+DESIGN SYSTEM:
+- Theme: Clean Light
+- Primary color: #185FA5 (blue)
+- Background: #FFFFFF
+- Surface: #F8F8F6
+- Text primary: #1A1A1A
+- Text secondary: #6B6B66
+- Border: 0.5px #E0DDD5
+- Border radius: 10px cards, 20px inputs, 50% avatars
+- Font: System default (San Francisco / Roboto)
+- Role badges: Admin = blue pill, Mod = green pill, Member = no badge
+- Nav bar: 5 tabs — Feed, Chat, Members, Events, Profile
+
+---
+
+FIREBASE STRUCTURE:
+- /users/{uid} — name, role, avatar, bio, fcmToken
+- /posts/{postId} — authorId, text, imageUrl, likes[], comments[], createdAt, pinned
+- /comments/{commentId} — postId, authorId, text, createdAt
+- /chatMessages/{msgId} — senderId, text, createdAt
+- /dmThreads/{threadId} — memberId, adminId, messages[]
+- /events/{eventId} — title, date, description, link, createdBy
+- /announcements/{id} — title, body, createdAt, pinned
+- /notifications/{uid}/items/{id} — type, message, read, createdAt
+
+---
+
+PUSH NOTIFICATIONS (FCM):
+- Trigger on: new admin post, new event, DM received, comment reply
+- Admin broadcast: send to all tokens from Firestore
+
+---
+
+ADMIN PANEL FEATURES (inside app, role-gated):
+- Create/delete/pin posts
+- Create/edit/delete events
+- Post announcements
+- Change user roles
+- Broadcast push notification to all members
+
+---
+
+UI COMPONENTS TO BUILD:
+- PostCard — avatar, badge, text, image, like/comment bar
+- ChatBubble — sent/received variants
+- MemberRow — avatar, name, role badge, tap handler
+- EventCard — date block, title, time, description
+- NotifRow — avatar, message, time, unread dot
+- RoleBadge — "Admin" / "Mod" colored pill
+- BottomNavBar — 5 tabs with unread indicators
+- AdminBroadcastModal — title + message + send button
