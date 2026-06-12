@@ -4,10 +4,12 @@ export interface UserProfile {
   uid: string;
   name: string;
   email: string;
+  emailVerified: boolean;
   role: UserRole;
   avatar: string | null;
   bio: string;
   fcmToken: string | null;
+  lastSeen?: string;
   createdAt: number;
 }
 

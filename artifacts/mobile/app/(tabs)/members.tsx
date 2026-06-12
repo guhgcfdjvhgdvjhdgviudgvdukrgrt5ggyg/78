@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { collection, onSnapshot, query } from "firebase/firestore";
+import { api } from "@/lib/api";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,7 +14,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MemberRow } from "@/components/MemberRow";
 import { useColors } from "@/hooks/useColors";
-import { db } from "@/lib/firebase";
 import type { UserProfile } from "@/types";
 
 export default function MembersScreen() {
@@ -26,19 +25,20 @@ export default function MembersScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, "users"));
-    const unsub = onSnapshot(q, (snap) => {
-      const allMembers = snap.docs.map(
-        (d) => ({ uid: d.id, ...d.data() } as UserProfile)
-      );
-      allMembers.sort((a, b) => {
-        const order = { admin: 0, moderator: 1, member: 2 };
-        return (order[a.role] ?? 3) - (order[b.role] ?? 3);
-      });
-      setMembers(allMembers);
-      setLoading(false);
-    });
-    return () => unsub();
+    (async () => {
+      try {
+        const allMembers = await api.users.list();
+        allMembers.sort((a: UserProfile, b: UserProfile) => {
+          const order = { admin: 0, moderator: 1, member: 2 };
+          return (order[a.role] ?? 3) - (order[b.role] ?? 3);
+        });
+        setMembers(allMembers);
+      } catch (err) {
+        console.warn("Members fetch error:", err);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   const filtered = useMemo(

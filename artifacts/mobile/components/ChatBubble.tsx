@@ -1,3 +1,4 @@
+import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
@@ -10,10 +11,14 @@ interface Props {
   message: ChatMessage;
   isOwn: boolean;
   showSender?: boolean;
+  online?: boolean;
 }
 
-export function ChatBubble({ message, isOwn, showSender = true }: Props) {
+export function ChatBubble({ message, isOwn, showSender = true, online }: Props) {
   const colors = useColors();
+
+  const now = Date.now();
+  const canBeSeen = isOwn && now - message.createdAt > 3000;
 
   return (
     <View style={[styles.row, isOwn && styles.rowOwn]}>
@@ -36,6 +41,7 @@ export function ChatBubble({ message, isOwn, showSender = true }: Props) {
             <Text style={[styles.senderName, { color: colors.foreground }]}>
               {message.senderName}
             </Text>
+            {online && <View style={[styles.onlineDot, { backgroundColor: colors.success }]} />}
             <RoleBadge role={message.senderRole} small />
           </View>
         )}
@@ -58,9 +64,17 @@ export function ChatBubble({ message, isOwn, showSender = true }: Props) {
             {message.text}
           </Text>
         </View>
-        <Text style={[styles.time, { color: colors.mutedForeground }]}>
-          {timeAgo(message.createdAt)}
-        </Text>
+        <View style={styles.metaRow}>
+          <Text style={[styles.time, { color: colors.mutedForeground }]}>
+            {timeAgo(message.createdAt)}
+          </Text>
+          {canBeSeen && (
+            <View style={styles.seenRow}>
+              <Feather name="eye" size={10} color={colors.mutedForeground} />
+              <Text style={[styles.seenText, { color: colors.mutedForeground }]}>Seen</Text>
+            </View>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -110,6 +124,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
   bubble: {
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -119,9 +138,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 21,
   },
-  time: {
-    fontSize: 11,
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     marginTop: 3,
     paddingHorizontal: 2,
+  },
+  time: {
+    fontSize: 11,
+  },
+  seenRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  seenText: {
+    fontSize: 10,
   },
 });

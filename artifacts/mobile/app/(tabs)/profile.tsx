@@ -2,15 +2,8 @@ import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-} from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import React, { useEffect, useState } from "react";
+import { api } from "@/lib/api";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -29,7 +22,6 @@ import { PostCard } from "@/components/PostCard";
 import { RoleBadge } from "@/components/RoleBadge";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { db, storage } from "@/lib/firebase";
 import type { Post } from "@/types";
 
 export default function ProfileScreen() {
@@ -48,19 +40,22 @@ export default function ProfileScreen() {
 
   const isAdmin = profile?.role === "admin";
 
-  useEffect(() => {
+  const fetchMyPosts = useCallback(async () => {
     if (!profile) return;
-    const q = query(
-      collection(db, "posts"),
-      where("authorId", "==", profile.uid),
-      orderBy("createdAt", "desc")
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setMyPosts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Post)));
+    try {
+      const allPosts = await api.posts.list();
+      const filtered = allPosts.filter((p: Post) => p.authorId === profile.uid);
+      setMyPosts(filtered);
+    } catch (err) {
+      console.warn("Profile posts fetch error:", err);
+    } finally {
       setLoadingPosts(false);
-    });
-    return () => unsub();
+    }
   }, [profile?.uid]);
+
+  useEffect(() => {
+    fetchMyPosts();
+  }, [fetchMyPosts]);
 
   const openEdit = () => {
     setEditName(profile?.name ?? "");
@@ -86,12 +81,7 @@ export default function ProfileScreen() {
     if (result.canceled || !result.assets[0] || !profile) return;
     setUploadingAvatar(true);
     try {
-      const response = await fetch(result.assets[0].uri);
-      const blob = await response.blob();
-      const storageRef = ref(storage, `avatars/${profile.uid}.jpg`);
-      await uploadBytes(storageRef, blob);
-      const url = await getDownloadURL(storageRef);
-      await updateProfile({ avatar: url });
+      await updateProfile({ avatar: result.assets[0].uri });
     } catch {
       Alert.alert("Error", "Failed to upload avatar.");
     } finally {

@@ -25,11 +25,12 @@ export default function RegisterScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
 
   const handleRegister = async () => {
-    if (!name.trim() || !email.trim() || !password) {
+    if (!name.trim() || !email.trim() || !password || !confirmPassword) {
       Alert.alert("Missing Fields", "Please fill in all fields.");
       return;
     }
@@ -37,15 +38,16 @@ export default function RegisterScreen() {
       Alert.alert("Weak Password", "Password must be at least 6 characters.");
       return;
     }
+    if (password !== confirmPassword) {
+      Alert.alert("Passwords Don't Match", "Please make sure your passwords match.");
+      return;
+    }
     setLoading(true);
     try {
       await signUp(name.trim(), email.trim(), password);
+      router.replace("/(tabs)");
     } catch (err: any) {
-      const msg =
-        err.code === "auth/email-already-in-use"
-          ? "This email is already registered."
-          : err.message ?? "Registration failed.";
-      Alert.alert("Registration Failed", msg);
+      Alert.alert("Registration Failed", err?.message || "Try again.");
     } finally {
       setLoading(false);
     }
@@ -151,6 +153,27 @@ export default function RegisterScreen() {
                 color={colors.mutedForeground}
               />
             </TouchableOpacity>
+          </View>
+
+          <View
+            style={[
+              styles.inputWrap,
+              {
+                borderColor: colors.border,
+                borderRadius: 20,
+                backgroundColor: colors.card,
+              },
+            ]}
+          >
+            <Feather name="lock" size={18} color={colors.mutedForeground} />
+            <TextInput
+              style={[styles.input, { color: colors.foreground }]}
+              placeholder="Confirm password"
+              placeholderTextColor={colors.mutedForeground}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry={!showPass}
+            />
           </View>
 
           <TouchableOpacity

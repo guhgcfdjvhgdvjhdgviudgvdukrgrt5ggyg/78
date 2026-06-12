@@ -1,18 +1,7 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  increment,
-  onSnapshot,
-  orderBy,
-  query,
-  updateDoc,
-} from "firebase/firestore";
-import React, { useEffect, useRef, useState } from "react";
+import { api } from "@/lib/api";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -30,7 +19,6 @@ import { RoleBadge } from "@/components/RoleBadge";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { timeAgo } from "@/lib/timeAgo";
-import { db } from "@/lib/firebase";
 import type { Comment, Post } from "@/types";
 
 export default function PostDetailScreen() {
@@ -45,43 +33,45 @@ export default function PostDetailScreen() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
 
-  useEffect(() => {
+  const fetchPost = useCallback(async () => {
     if (!id) return;
-    getDoc(doc(db, "posts", id)).then((snap) => {
-      if (snap.exists()) setPost({ id: snap.id, ...snap.data() } as Post);
-      setLoading(false);
-    });
-    const q = query(
-      collection(db, "comments"),
-      orderBy("createdAt", "asc")
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setComments(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as Comment))
-          .filter((c) => c.postId === id)
-      );
-    });
-    return () => unsub();
+    try {
+      const allPosts = await api.posts.list();
+      const found = allPosts.find((p: Post) => p.id === id);
+      if (found) setPost(found);
+    } catch (err) {
+      console.warn("Post detail error:", err);
+    }
   }, [id]);
+
+  const fetchComments = useCallback(async () => {
+    if (!id) return;
+    try {
+      const allComments = await api.comments.list(id);
+      setComments(allComments);
+    } catch (err) {
+      console.warn("Comments fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    fetchPost();
+    fetchComments();
+    const interval = setInterval(fetchComments, 5000);
+    return () => clearInterval(interval);
+  }, [fetchPost, fetchComments]);
 
   const handleComment = async () => {
     if (!text.trim() || !profile || !id) return;
     setSending(true);
     try {
-      await addDoc(collection(db, "comments"), {
-        postId: id,
-        authorId: profile.uid,
-        authorName: profile.name,
-        authorRole: profile.role,
-        authorAvatar: profile.avatar,
-        text: text.trim(),
-        createdAt: Date.now(),
-      });
-      await updateDoc(doc(db, "posts", id), {
-        commentCount: increment(1),
-      });
+      await api.comments.create(id, text.trim());
       setText("");
+    } catch (e) {
+      console.warn("Comment error:", e);
+      Alert.alert("Error", "Failed to add comment.");
     } finally {
       setSending(false);
     }
@@ -99,11 +89,11 @@ export default function PostDetailScreen() {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          await deleteDoc(doc(db, "comments", commentId));
-          if (id) {
-            await updateDoc(doc(db, "posts", id), {
-              commentCount: increment(-1),
-            });
+          try {
+            await api.comments.delete(commentId);
+          } catch (e) {
+            console.warn("Delete comment error:", e);
+            Alert.alert("Error", "Failed to delete comment.");
           }
         },
       },

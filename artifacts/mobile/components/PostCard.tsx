@@ -2,12 +2,6 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import {
-  arrayRemove,
-  arrayUnion,
-  doc,
-  updateDoc,
-} from "firebase/firestore";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -19,7 +13,6 @@ import {
 } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { db } from "@/lib/firebase";
 import type { Post } from "@/types";
 import { RoleBadge } from "./RoleBadge";
 import { timeAgo } from "@/lib/timeAgo";
@@ -44,14 +37,8 @@ export function PostCard({ post, onDelete, onPin }: Props) {
     if (!profile || liking) return;
     setLiking(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      const postRef = doc(db, "posts", post.id);
-      await updateDoc(postRef, {
-        likes: isLiked ? arrayRemove(profile.uid) : arrayUnion(profile.uid),
-      });
-    } finally {
-      setLiking(false);
-    }
+    console.warn("Like not implemented via REST API yet");
+    setLiking(false);
   };
 
   const handleLongPress = () => {

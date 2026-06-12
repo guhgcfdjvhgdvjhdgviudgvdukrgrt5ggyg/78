@@ -1,8 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
-import { addDoc, collection } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { api } from "@/lib/api";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -18,7 +17,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { db, storage } from "@/lib/firebase";
 
 interface Props {
   visible: boolean;
@@ -47,29 +45,8 @@ export function NewPostModal({ visible, onClose }: Props) {
     if (!text.trim() || !profile) return;
     setSubmitting(true);
     try {
-      let imageUrl: string | null = null;
-      if (imageUri) {
-        const response = await fetch(imageUri);
-        const blob = await response.blob();
-        const storageRef = ref(
-          storage,
-          `posts/${Date.now()}_${profile.uid}.jpg`
-        );
-        await uploadBytes(storageRef, blob);
-        imageUrl = await getDownloadURL(storageRef);
-      }
-      await addDoc(collection(db, "posts"), {
-        authorId: profile.uid,
-        authorName: profile.name,
-        authorRole: profile.role,
-        authorAvatar: profile.avatar,
-        text: text.trim(),
-        imageUrl,
-        likes: [],
-        commentCount: 0,
-        createdAt: Date.now(),
-        pinned: false,
-      });
+      const imageUrl = imageUri ?? null;
+      await api.posts.create(text.trim(), imageUrl);
       setText("");
       setImageUri(null);
       onClose();

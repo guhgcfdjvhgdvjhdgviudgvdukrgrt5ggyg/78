@@ -37,11 +37,12 @@ export default function LoginScreen() {
     try {
       await signIn(email.trim(), password);
     } catch (err: any) {
-      const msg =
-        err.code === "auth/invalid-credential"
-          ? "Invalid email or password."
-          : err.message ?? "Login failed.";
-      Alert.alert("Login Failed", msg);
+      const msg = err.message ?? "Login failed.";
+      if (msg.toLowerCase().includes("verify your email")) {
+        Alert.alert("Email Not Verified", "Please check your email to verify your account before logging in.");
+      } else {
+        Alert.alert("Login Failed", msg);
+      }
     } finally {
       setLoading(false);
     }

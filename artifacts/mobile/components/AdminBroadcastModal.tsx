@@ -1,4 +1,4 @@
-import { addDoc, collection, getDocs } from "firebase/firestore";
+import { api } from "@/lib/api";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -14,7 +14,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { db } from "@/lib/firebase";
 
 interface Props {
   visible: boolean;
@@ -33,23 +32,8 @@ export function AdminBroadcastModal({ visible, onClose }: Props) {
     if (!title.trim() || !message.trim() || !profile) return;
     setSending(true);
     try {
-      const usersSnap = await getDocs(collection(db, "users"));
-      const notifPromises = usersSnap.docs.map((userDoc) =>
-        addDoc(collection(db, "notifications", userDoc.id, "items"), {
-          type: "broadcast",
-          message: `📢 ${title}: ${message}`,
-          read: false,
-          createdAt: Date.now(),
-        })
-      );
-      await Promise.all(notifPromises);
-      await addDoc(collection(db, "announcements"), {
-        title: title.trim(),
-        body: message.trim(),
-        createdAt: Date.now(),
-        pinned: true,
-      });
-      Alert.alert("Sent!", `Broadcast sent to ${usersSnap.docs.length} members.`);
+      await api.notifications.broadcast(title.trim(), message.trim());
+      Alert.alert("Sent!", "Broadcast sent to all members.");
       setTitle("");
       setMessage("");
       onClose();

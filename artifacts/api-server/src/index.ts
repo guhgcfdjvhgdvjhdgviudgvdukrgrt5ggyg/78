@@ -2,6 +2,9 @@ import app from "./app";
 import { logger } from "./lib/logger";
 
 const rawPort = process.env["PORT"];
+const _smtpUser = process.env["SMTP_USER"];
+const _smtpPass = process.env["SMTP_PASS"];
+const _apiBaseUrl = process.env["API_BASE_URL"];
 
 if (!rawPort) {
   throw new Error(

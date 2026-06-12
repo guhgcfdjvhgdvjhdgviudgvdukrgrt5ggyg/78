@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { api } from "@/lib/api";
 import React, { useEffect, useState } from "react";
 import {
   ActionSheetIOS,
@@ -18,7 +18,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RoleBadge } from "@/components/RoleBadge";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { db } from "@/lib/firebase";
 import type { UserProfile, UserRole } from "@/types";
 
 export default function MemberProfileScreen() {
@@ -32,10 +31,10 @@ export default function MemberProfileScreen() {
 
   useEffect(() => {
     if (!id) return;
-    getDoc(doc(db, "users", id)).then((snap) => {
-      if (snap.exists()) setMember({ uid: snap.id, ...snap.data() } as UserProfile);
-      setLoading(false);
-    });
+    api.users.get(id)
+      .then((data) => setMember({ uid: data.id, ...data } as UserProfile))
+      .catch(console.warn)
+      .finally(() => setLoading(false));
   }, [id]);
 
   const handleChangeRole = () => {
@@ -48,15 +47,15 @@ export default function MemberProfileScreen() {
         async (idx) => {
           if (idx === 3) return;
           const newRole = roles[idx];
-          await updateDoc(doc(db, "users", member.uid), { role: newRole });
+          await api.users.update(member.uid, { role: newRole });
           setMember((m) => m ? { ...m, role: newRole } : m);
         }
       );
     } else {
       Alert.alert("Change Role", "Select a role:", [
-        { text: "Member", onPress: async () => { await updateDoc(doc(db, "users", member.uid), { role: "member" }); setMember((m) => m ? { ...m, role: "member" } : m); } },
-        { text: "Moderator", onPress: async () => { await updateDoc(doc(db, "users", member.uid), { role: "moderator" }); setMember((m) => m ? { ...m, role: "moderator" } : m); } },
-        { text: "Admin", onPress: async () => { await updateDoc(doc(db, "users", member.uid), { role: "admin" }); setMember((m) => m ? { ...m, role: "admin" } : m); } },
+        { text: "Member", onPress: async () => { await api.users.update(member.uid, { role: "member" }); setMember((m) => m ? { ...m, role: "member" } : m); } },
+        { text: "Moderator", onPress: async () => { await api.users.update(member.uid, { role: "moderator" }); setMember((m) => m ? { ...m, role: "moderator" } : m); } },
+        { text: "Admin", onPress: async () => { await api.users.update(member.uid, { role: "admin" }); setMember((m) => m ? { ...m, role: "admin" } : m); } },
         { text: "Cancel", style: "cancel" },
       ]);
     }

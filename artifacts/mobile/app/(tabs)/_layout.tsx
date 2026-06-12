@@ -26,7 +26,7 @@ function NativeTabLayout() {
         <Label>Members</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="events">
-        <Icon sf={{ default: "calendar", selected: "calendar.fill" }} />
+        <Icon sf={{ default: "calendar", selected: "calendar.fill" } as any} />
         <Label>Events</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">

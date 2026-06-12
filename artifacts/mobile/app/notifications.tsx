@@ -1,14 +1,6 @@
 import { Feather } from "@expo/vector-icons";
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  updateDoc,
-  writeBatch,
-  doc,
-} from "firebase/firestore";
-import React, { useEffect, useState } from "react";
+import { api } from "@/lib/api";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -21,7 +13,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NotifRow } from "@/components/NotifRow";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { db } from "@/lib/firebase";
 import type { AppNotification } from "@/types";
 
 export default function NotificationsScreen() {
@@ -31,39 +22,40 @@ export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchNotifications = useCallback(async () => {
     if (!user) return;
-    const q = query(
-      collection(db, "notifications", user.uid, "items"),
-      orderBy("createdAt", "desc")
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setNotifications(
-        snap.docs.map((d) => ({ id: d.id, ...d.data() } as AppNotification))
-      );
+    try {
+      const notifs = await api.notifications.list();
+      setNotifications(notifs);
+    } catch (err) {
+      console.warn("Notifications fetch error:", err);
+    } finally {
       setLoading(false);
-    });
-    return () => unsub();
+    }
   }, [user]);
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 5000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
 
   const markAllRead = async () => {
     if (!user) return;
-    const batch = writeBatch(db);
-    notifications
-      .filter((n) => !n.read)
-      .forEach((n) => {
-        batch.update(doc(db, "notifications", user.uid, "items", n.id), {
-          read: true,
-        });
-      });
-    await batch.commit();
+    try {
+      await api.notifications.readAll();
+    } catch (e) {
+      console.warn("markAllRead error:", e);
+    }
   };
 
   const handlePress = async (n: AppNotification) => {
     if (!user || n.read) return;
-    await updateDoc(doc(db, "notifications", user.uid, "items", n.id), {
-      read: true,
-    });
+    try {
+      await api.notifications.read(n.id);
+    } catch (e) {
+      console.warn("handlePress error:", e);
+    }
   };
 
   const unreadCount = notifications.filter((n) => !n.read).length;

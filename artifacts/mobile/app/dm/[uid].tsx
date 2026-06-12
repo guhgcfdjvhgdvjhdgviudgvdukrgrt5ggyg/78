@@ -1,19 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useNavigation } from "expo-router";
-import {
-  addDoc,
-  collection,
-  doc,
-  getDoc,
-  onSnapshot,
-  orderBy,
-  query,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
-import React, { useEffect, useRef, useState } from "react";
+import { api } from "@/lib/api";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Platform,
   StyleSheet,
@@ -27,7 +18,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { timeAgo } from "@/lib/timeAgo";
-import { db } from "@/lib/firebase";
 import type { DMMessage, UserProfile } from "@/types";
 
 function getThreadId(uid1: string, uid2: string) {
@@ -50,27 +40,29 @@ export default function DMThreadScreen() {
 
   useEffect(() => {
     if (!uid) return;
-    getDoc(doc(db, "users", uid)).then((snap) => {
-      if (snap.exists()) {
-        const u = { uid: snap.id, ...snap.data() } as UserProfile;
-        setOtherUser(u);
-        navigation.setOptions({ title: u.name });
-      }
-    });
+    api.users.get(uid).then((u) => {
+      setOtherUser(u as UserProfile);
+      navigation.setOptions({ title: u.name });
+    }).catch((err) => console.warn("User fetch error:", err));
   }, [uid]);
 
-  useEffect(() => {
+  const fetchMessages = useCallback(async () => {
     if (!threadId) return;
-    const q = query(
-      collection(db, "dmThreads", threadId, "messages"),
-      orderBy("createdAt", "desc")
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() } as DMMessage)));
+    try {
+      const msgs = await api.dm.messages(threadId);
+      setMessages(msgs);
+    } catch (err) {
+      console.warn("DM messages fetch error:", err);
+    } finally {
       setLoading(false);
-    });
-    return () => unsub();
+    }
   }, [threadId]);
+
+  useEffect(() => {
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 3000);
+    return () => clearInterval(interval);
+  }, [fetchMessages]);
 
   const handleSend = async () => {
     if (!text.trim() || !profile || !threadId || !uid) return;
@@ -78,25 +70,10 @@ export default function DMThreadScreen() {
     setText("");
     setSending(true);
     try {
-      await addDoc(collection(db, "dmThreads", threadId, "messages"), {
-        senderId: profile.uid,
-        senderName: profile.name,
-        text: msgText,
-        createdAt: Date.now(),
-      });
-      await setDoc(
-        doc(db, "dmThreads", threadId),
-        {
-          memberId: profile.role !== "admin" ? profile.uid : uid,
-          memberName: profile.role !== "admin" ? profile.name : otherUser?.name ?? "",
-          memberAvatar: profile.role !== "admin" ? profile.avatar : otherUser?.avatar ?? null,
-          adminId: profile.role === "admin" ? profile.uid : uid,
-          lastMessage: msgText,
-          lastMessageAt: Date.now(),
-          unreadForAdmin: profile.role !== "admin" ? 1 : 0,
-        },
-        { merge: true }
-      );
+      await api.dm.send(threadId, msgText);
+    } catch (e) {
+      console.warn("Send DM error:", e);
+      Alert.alert("Error", "Failed to send message.");
     } finally {
       setSending(false);
     }

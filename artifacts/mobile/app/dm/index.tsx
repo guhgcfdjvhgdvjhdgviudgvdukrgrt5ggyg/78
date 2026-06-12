@@ -1,8 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
-import React, { useEffect, useState } from "react";
+import { api } from "@/lib/api";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -15,7 +15,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { timeAgo } from "@/lib/timeAgo";
-import { db } from "@/lib/firebase";
 import type { DMThread } from "@/types";
 
 export default function DMInboxScreen() {
@@ -26,19 +25,23 @@ export default function DMInboxScreen() {
   const [threads, setThreads] = useState<DMThread[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchThreads = useCallback(async () => {
     if (!user) return;
-    const q = query(
-      collection(db, "dmThreads"),
-      where("adminId", "==", user.uid),
-      orderBy("lastMessageAt", "desc")
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setThreads(snap.docs.map((d) => ({ id: d.id, ...d.data() } as DMThread)));
+    try {
+      const allThreads = await api.dm.threads();
+      setThreads(allThreads);
+    } catch (err) {
+      console.warn("DM threads fetch error:", err);
+    } finally {
       setLoading(false);
-    });
-    return () => unsub();
+    }
   }, [user]);
+
+  useEffect(() => {
+    fetchThreads();
+    const interval = setInterval(fetchThreads, 5000);
+    return () => clearInterval(interval);
+  }, [fetchThreads]);
 
   return (
     <View

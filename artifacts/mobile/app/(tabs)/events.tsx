@@ -1,15 +1,6 @@
 import { Feather } from "@expo/vector-icons";
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-} from "firebase/firestore";
-import React, { useEffect, useState } from "react";
+import { api } from "@/lib/api";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,7 +18,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EventCard } from "@/components/EventCard";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { db } from "@/lib/firebase";
 import type { Announcement, Event } from "@/types";
 
 export default function EventsScreen() {
@@ -49,67 +39,66 @@ export default function EventsScreen() {
   const canManage =
     profile?.role === "admin" || profile?.role === "moderator";
 
-  useEffect(() => {
-    const evQ = query(collection(db, "events"), orderBy("date", "asc"));
-    const unsubEv = onSnapshot(evQ, (snap) => {
-      setEvents(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Event)));
-    });
-
-    const annQ = query(
-      collection(db, "announcements"),
-      orderBy("createdAt", "desc")
-    );
-    const unsubAnn = onSnapshot(annQ, (snap) => {
-      setAnnouncements(
-        snap.docs.map((d) => ({ id: d.id, ...d.data() } as Announcement))
-      );
+  const fetchData = useCallback(async () => {
+    try {
+      const [evts, anns] = await Promise.all([
+        api.events.list(),
+        api.announcements.list(),
+      ]);
+      setEvents(evts);
+      setAnnouncements(anns);
+    } catch (err) {
+      console.warn("Events/announcements fetch error:", err);
+    } finally {
       setLoading(false);
-    });
-    return () => {
-      unsubEv();
-      unsubAnn();
-    };
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const handleSave = async () => {
     if (!profile) return;
-    if (createType === "event") {
-      if (!eTitle.trim() || !eDate.trim()) {
-        Alert.alert("Missing Fields", "Title and date are required.");
-        return;
+    try {
+      if (createType === "event") {
+        if (!eTitle.trim() || !eDate.trim()) {
+          Alert.alert("Missing Fields", "Title and date are required.");
+          return;
+        }
+        const dateTs = new Date(eDate).getTime();
+        if (isNaN(dateTs)) {
+          Alert.alert("Invalid Date", "Please enter a valid date (e.g. 2025-12-31T18:00).");
+          return;
+        }
+        setSaving(true);
+        await api.events.create({
+          title: eTitle.trim(),
+          date: eDate.trim(),
+          description: eDesc.trim() || undefined,
+          link: eLink.trim() || undefined,
+        });
+      } else {
+        if (!eTitle.trim()) {
+          Alert.alert("Missing Fields", "Title is required.");
+          return;
+        }
+        setSaving(true);
+        await api.announcements.create(eTitle.trim(), eDesc.trim());
       }
-      const dateTs = new Date(eDate).getTime();
-      if (isNaN(dateTs)) {
-        Alert.alert("Invalid Date", "Please enter a valid date (e.g. 2025-12-31T18:00).");
-        return;
-      }
-      setSaving(true);
-      await addDoc(collection(db, "events"), {
-        title: eTitle.trim(),
-        date: dateTs,
-        description: eDesc.trim(),
-        link: eLink.trim(),
-        createdBy: profile.uid,
-      });
-    } else {
-      if (!eTitle.trim()) {
-        Alert.alert("Missing Fields", "Title is required.");
-        return;
-      }
-      setSaving(true);
-      await addDoc(collection(db, "announcements"), {
-        title: eTitle.trim(),
-        body: eDesc.trim(),
-        createdAt: Date.now(),
-        pinned: true,
-      });
+      setETitle("");
+      setEDate("");
+      setEDesc("");
+      setELink("");
+      setShowCreate(false);
+    } catch (e) {
+      console.warn("Save error:", e);
+      Alert.alert("Error", "Failed to save.");
+    } finally {
+      setSaving(false);
     }
-    setETitle("");
-    setEDate("");
-    setEDesc("");
-    setELink("");
-    setSaving(false);
-    setShowCreate(false);
   };
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -168,15 +157,20 @@ export default function EventsScreen() {
                   ]}
                 >
                   <View style={styles.annHeader}>
-                    <Feather name="megaphone" size={16} color={colors.primary} />
+                    <Feather name="bell" size={16} color={colors.primary} />
                     <Text style={[styles.annTitle, { color: colors.primary }]}>
                       {ann.title}
                     </Text>
                     {canManage && (
                       <TouchableOpacity
-                        onPress={() =>
-                          deleteDoc(doc(db, "announcements", ann.id))
-                        }
+                        onPress={async () => {
+                          try {
+                            await api.announcements.delete(ann.id);
+                          } catch (e) {
+                            console.warn("Delete announcement error:", e);
+                            Alert.alert("Error", "Failed to delete.");
+                          }
+                        }}
                         style={styles.deleteBtn}
                       >
                         <Feather
@@ -211,7 +205,14 @@ export default function EventsScreen() {
                   key={ev.id}
                   event={ev}
                   canEdit={canManage}
-                  onDelete={(id) => deleteDoc(doc(db, "events", id))}
+                  onDelete={async (id: string) => {
+                    try {
+                      await api.events.delete(id);
+                    } catch (e) {
+                      console.warn("Delete event error:", e);
+                      Alert.alert("Error", "Failed to delete.");
+                    }
+                  }}
                 />
               ))}
             </View>

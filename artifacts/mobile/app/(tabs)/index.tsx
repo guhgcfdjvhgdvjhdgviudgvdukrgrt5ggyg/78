@@ -1,16 +1,9 @@
 import { Feather } from "@expo/vector-icons";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  updateDoc,
-} from "firebase/firestore";
-import React, { useEffect, useState } from "react";
+import { api } from "@/lib/api";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Platform,
   StyleSheet,
@@ -24,7 +17,6 @@ import { NewPostModal } from "@/components/NewPostModal";
 import { PostCard } from "@/components/PostCard";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { db } from "@/lib/firebase";
 import type { Post } from "@/types";
 import { useRouter } from "expo-router";
 
@@ -39,29 +31,44 @@ export default function FeedScreen() {
   const [showNewPost, setShowNewPost] = useState(false);
   const [showBroadcast, setShowBroadcast] = useState(false);
 
-  useEffect(() => {
-    const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(q, (snap) => {
-      const allPosts = snap.docs.map(
-        (d) => ({ id: d.id, ...d.data() } as Post)
-      );
+  const fetchPosts = useCallback(async () => {
+    try {
+      const allPosts = await api.posts.list();
       const sorted = [
-        ...allPosts.filter((p) => p.pinned),
-        ...allPosts.filter((p) => !p.pinned),
+        ...allPosts.filter((p: Post) => p.pinned),
+        ...allPosts.filter((p: Post) => !p.pinned),
       ];
       setPosts(sorted);
+    } catch (err) {
+      console.warn("Feed fetch error:", err);
+    } finally {
       setLoading(false);
       setRefreshing(false);
-    });
-    return () => unsub();
+    }
   }, []);
 
+  useEffect(() => {
+    fetchPosts();
+    const interval = setInterval(fetchPosts, 5000);
+    return () => clearInterval(interval);
+  }, [fetchPosts]);
+
   const handleDelete = async (postId: string) => {
-    await deleteDoc(doc(db, "posts", postId));
+    try {
+      await api.posts.delete(postId);
+    } catch (e) {
+      console.warn("Delete post error:", e);
+      Alert.alert("Error", "Failed to delete post.");
+    }
   };
 
   const handlePin = async (postId: string, pinned: boolean) => {
-    await updateDoc(doc(db, "posts", postId), { pinned });
+    try {
+      await api.posts.pin(postId, pinned);
+    } catch (e) {
+      console.warn("Pin post error:", e);
+      Alert.alert("Error", "Failed to pin/unpin post.");
+    }
   };
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -125,7 +132,7 @@ export default function FeedScreen() {
             paddingTop: 8,
             paddingBottom: insets.bottom + 90,
           }}
-          onRefresh={() => setRefreshing(true)}
+          onRefresh={() => { setRefreshing(true); fetchPosts(); }}
           refreshing={refreshing}
           showsVerticalScrollIndicator={false}
         />

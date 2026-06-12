@@ -1,15 +1,7 @@
+import { useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-} from "firebase/firestore";
-import React, { useEffect, useState } from "react";
+import { api } from "@/lib/api";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -26,8 +18,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChatBubble } from "@/components/ChatBubble";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { db } from "@/lib/firebase";
 import type { ChatMessage } from "@/types";
+
+const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
 
 export default function ChatScreen() {
   const colors = useColors();
@@ -35,23 +28,53 @@ export default function ChatScreen() {
   const { profile } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [allMessages, allUsers] = await Promise.all([
+        api.chat.list(),
+        api.users.list(),
+      ]);
+      setMessages(allMessages);
+      const now = Date.now();
+      const online = new Set<string>();
+      for (const u of allUsers) {
+        if (u.lastSeen) {
+          const lastSeen = new Date(u.lastSeen).getTime();
+          if (now - lastSeen < ONLINE_THRESHOLD_MS) {
+            online.add(u.id);
+          }
+        }
+      }
+      setOnlineUsers(online);
+      setError(null);
+    } catch (err) {
+      console.warn("Chat fetch error:", err);
+      setError("Could not load messages");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const q = query(
-      collection(db, "chatMessages"),
-      orderBy("createdAt", "desc"),
-      limit(80)
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setMessages(
-        snap.docs.map((d) => ({ id: d.id, ...d.data() } as ChatMessage))
-      );
-      setLoading(false);
-    });
-    return () => unsub();
-  }, []);
+    fetchData();
+    const interval = setInterval(fetchData, 3000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      api.heartbeat().catch(() => {});
+      const interval = setInterval(() => {
+        api.heartbeat().catch(() => {});
+      }, 60000);
+      return () => clearInterval(interval);
+    }, [])
+  );
 
   const handleSend = async () => {
     if (!text.trim() || !profile || sending) return;
@@ -59,14 +82,10 @@ export default function ChatScreen() {
     setText("");
     setSending(true);
     try {
-      await addDoc(collection(db, "chatMessages"), {
-        senderId: profile.uid,
-        senderName: profile.name,
-        senderRole: profile.role,
-        senderAvatar: profile.avatar,
-        text: msgText,
-        createdAt: Date.now(),
-      });
+      await api.chat.send(msgText);
+    } catch (e) {
+      console.warn("Send message error:", e);
+      Alert.alert("Error", "Failed to send message.");
     } finally {
       setSending(false);
     }
@@ -83,7 +102,14 @@ export default function ChatScreen() {
       {
         text: "Delete",
         style: "destructive",
-        onPress: () => deleteDoc(doc(db, "chatMessages", msg.id)),
+        onPress: async () => {
+          try {
+            await api.chat.delete(msg.id);
+          } catch (e) {
+            console.warn("Delete message error:", e);
+            Alert.alert("Error", "Failed to delete message.");
+          }
+        },
       },
     ]);
   };
@@ -117,6 +143,26 @@ export default function ChatScreen() {
           <View style={styles.center}>
             <ActivityIndicator color={colors.primary} />
           </View>
+        ) : error ? (
+          <View style={styles.center}>
+            <Feather name="wifi-off" size={48} color={colors.mutedForeground} />
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+              {error}
+            </Text>
+            <TouchableOpacity onPress={fetchData} style={[styles.retryBtn, { borderColor: colors.primary }]}>
+              <Text style={{ color: colors.primary, fontWeight: "700" }}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : messages.length === 0 ? (
+          <View style={styles.center}>
+            <Feather name="message-circle" size={48} color={colors.mutedForeground} />
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+              No messages yet
+            </Text>
+            <Text style={[styles.emptySubtext, { color: colors.mutedForeground }]}>
+              Send the first message to the community!
+            </Text>
+          </View>
         ) : (
           <FlatList
             data={messages}
@@ -136,6 +182,7 @@ export default function ChatScreen() {
                     message={item}
                     isOwn={item.senderId === profile?.uid}
                     showSender={showSender}
+                    online={onlineUsers.has(item.senderId)}
                   />
                 </TouchableOpacity>
               );
@@ -213,6 +260,9 @@ const styles = StyleSheet.create({
   onlineDot: { width: 8, height: 8, borderRadius: 4 },
   container: { flex: 1 },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  emptyText: { fontSize: 18, fontWeight: "700", marginTop: 16 },
+  emptySubtext: { fontSize: 14, marginTop: 6, opacity: 0.7 },
+  retryBtn: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 24, paddingVertical: 10, marginTop: 16 },
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
